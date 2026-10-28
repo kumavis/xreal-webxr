@@ -55,7 +55,11 @@ function beginAction(name) {
     () =>
       completeAction(
         false,
-        "No confirmation received. Reload the extension and this page, then Connect again.",
+        pose && performance.now() - lastUpdate < 500
+          ? pose.connected
+            ? "Helper did not confirm the command. Check the USB connection and try again."
+            : pose.status
+          : "No response from the helper. Check that it is running, then click Connect.",
       ),
     4500,
   );
@@ -72,13 +76,29 @@ window.addEventListener("message", (event) => {
   if (event.source !== window || event.data?.source !== "xreal-extension")
     return;
   if (event.data.type === "pose" && validPose(event.data.pose)) {
+    const reconnected = pose?.connected === false && event.data.pose.connected;
     pose = event.data.pose;
     lastUpdate = performance.now();
     if (pose.connected && pose.calibrated && pose.age_ms < 200)
       device.quaternion.set(...pose.quaternion);
     statusText = pose.status;
-    if (pendingAction === "connect" && pose.connected)
-      completeAction(true, messages.connect[1]);
+    if (pendingAction === "connect") {
+      completeAction(
+        pose.connected,
+        pose.connected
+          ? pose.calibrated
+            ? messages.connect[1]
+            : "Connected — hold the glasses still for calibration"
+          : pose.status,
+      );
+    }
+    if (reconnected && !pendingAction && feedback?.dataset.state === "error")
+      completeAction(
+        true,
+        pose.calibrated
+          ? "Glasses reconnected — tracking is live"
+          : "Glasses reconnected — hold still for calibration",
+      );
   } else if (
     event.data.type === "command_result" &&
     event.data.command === pendingAction

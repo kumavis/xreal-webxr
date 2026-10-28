@@ -42,6 +42,15 @@ chrome.runtime.onConnect.addListener((port) => {
       socket?.readyState === 1
     ) {
       socket.send(message.command);
+    } else if (
+      ["recenter", "calibrate", "stereo", "mono"].includes(message.command)
+    ) {
+      send({
+        type: "command_result",
+        command: message.command,
+        ok: false,
+        message: "Not connected to the helper. Click Connect first.",
+      });
     } else if (message.command === "disconnect") {
       socket?.close();
     }

@@ -64,6 +64,22 @@ test("bundled runtime replaces native XR, uses tracked stereo views, and ends on
       );
     feed();
     const toolbar = w.document.querySelector("#xreal-webxr-toolbar").shadowRoot;
+    toolbar.querySelector("#connect").click();
+    feed({
+      connected: false,
+      calibrated: false,
+      status: "Waiting for XREAL USB connection — retrying automatically",
+    });
+    assert.match(
+      toolbar.querySelector("#feedback").textContent,
+      /Waiting for XREAL USB/,
+    );
+    assert.equal(toolbar.querySelector("#feedback").dataset.state, "error");
+    feed();
+    assert.equal(
+      toolbar.querySelector("#feedback").textContent,
+      "Glasses reconnected — tracking is live",
+    );
     toolbar.querySelector("#recenter").click();
     assert.equal(
       toolbar.querySelector("#feedback").textContent,

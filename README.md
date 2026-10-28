@@ -70,7 +70,7 @@ Three.js is pinned in the npm lockfile and bundled locally, with no CDN or exter
 - If calibration does not finish, put the glasses on a steady surface and click **Calibrate**. Calibration requires two continuous seconds without movement.
 - If the display looks doubled or cut in half, use **Mirror mode**. Exit XR before changing display modes. End the helper with **Ctrl-C** to restore the display mode it found on startup.
 - If the helper crashed while stereo was active, stop any remaining helper and run `cargo run --release -- --mono` to restore a conventional mirrored image in the glasses.
-- After USB disconnect, reconnect and restart the helper, then Connect again. The browser ends XR when tracking is stale or lost.
+- After USB disconnect, the helper automatically reopens the device when it returns. Keep the glasses still for two seconds to recalibrate, then re-enter VR. The existing browser connection can remain open. The browser ends XR when tracking is stale or lost.
 
 Additional modes (stop the normal helper before using these):
 
