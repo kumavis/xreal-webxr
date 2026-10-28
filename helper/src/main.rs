@@ -128,6 +128,11 @@ async fn main() {
             get(|| async { Html(include_str!("../../web/demo.html")) }),
         )
         .route(
+            "/scene",
+            get(|| async { Html(include_str!("../../web/scene.html")) }),
+        )
+        .route("/scene.js", get(scene_bundle))
+        .route(
             "/status",
             get(|State(app): State<App>| async move { Json(app.snapshot()) }),
         )
@@ -145,6 +150,23 @@ async fn main() {
         .await
         .unwrap();
     worker.join().ok();
+}
+
+async fn scene_bundle() -> impl IntoResponse {
+    // Fixed project-relative asset path; never accepts a path from the request.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/dist/scene.js");
+    match tokio::fs::read(path).await {
+        Ok(bytes) => (
+            StatusCode::OK,
+            [("content-type", "text/javascript; charset=utf-8")],
+            bytes,
+        ),
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [("content-type", "text/plain; charset=utf-8")],
+            b"Build the local scene: cd extension && npm ci && npm run build".to_vec(),
+        ),
+    }
 }
 
 fn allowed_origin(origin: &str) -> bool {

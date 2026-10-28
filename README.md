@@ -4,7 +4,7 @@ An experimental, MIT-licensed bridge from XREAL glasses to WebXR on macOS. A Rus
 
 No custom browser, account, paid runtime, cameras, or base stations. The bridge runs locally. The website you visit may have its own account requirements.
 
-**Prototype status:** real Air 2 Ultra sensor input and stationary calibration have been verified on an Apple Silicon Mac, at approximately 1,000 sensor samples/second. Automated tests cover fusion, stereo views, tracked orientation, and disconnect handling. Visual alignment through the glasses and compatibility with the target website still need human verification. This is an experimental browser shim, not a certified WebXR runtime or a general OpenXR driver.
+**Prototype status:** real Air 2 Ultra sensor input and stationary calibration have been verified on an Apple Silicon Mac, at approximately 1,000 sensor samples/second. Automated tests cover fusion, stereo views, tracked orientation, and disconnect handling. The stereo diagnostic has also been confirmed working through the glasses by a user. The target website and the new Three.js scene still need visual verification. This is an experimental browser shim, not a certified WebXR runtime or a general OpenXR driver.
 
 ## What it does
 
@@ -54,6 +54,14 @@ When rebuilding the extension, click **Reload** on its extension card and refres
 
 The default optical values are 63 mm IPD and 52° diagonal FOV (Air 2 Ultra). Adjust the toolbar values to your glasses and fit. These are symmetric approximate optics, not factory lens calibration; IPD changes the rendered eye separation, not the physical optics.
 
+## Orbit Room: full Three.js scene
+
+Open <http://127.0.0.1:4242/scene> for a complete Three.js scene with a lit floor, nearby geometric exhibits, a moving orbital sculpture, shadows, and surrounding architectural landmarks. The page automatically connects to the helper; keep the glasses in stereo mode and the browser on their extended display, wait for Tracking, then click **Fullscreen + Enter VR**. Look forward and press **Alt+R** if the scene needs centering.
+
+**Space** pauses/resumes the sculpture; **Escape** ends VR. Flat-screen preview supports dragging to orbit. In VR, the viewpoint is seated at 1.2 m with rotational tracking only. The scene hides its flat HTML controls during VR to avoid displaying them to just one eye.
+
+Three.js is pinned in the npm lockfile and bundled locally, with no CDN or external assets. `cd extension && npm ci && npm run build` generates `web/dist/scene.js` as well as the extension. The helper serves that bundle from the source checkout, so keep the checkout in place when running the binary. A missing bundle returns an actionable build message. Rebuilding scene JavaScript only requires refreshing the page; changing the embedded HTML requires rebuilding/restarting the helper.
+
 ## Recovery and diagnostics
 
 - `<http://127.0.0.1:4242/>` shows helper status; `/status` exposes JSON.
@@ -99,3 +107,5 @@ npm test
 The browser integration test runs the actual bundle in jsdom with a mocked WebGL context. It checks native-runtime replacement, session gating, two 1920 × 1080 eye viewports at a 3840 × 1080 test size, 63 mm separation, quaternion propagation, and session shutdown on sensor loss. It does not test a GPU, extension service-worker integration in Chrome, or physical optics.
 
 The implementation is MIT licensed. See [THIRD_PARTY.md](THIRD_PARTY.md) for the MIT driver and IWER provenance. Built extensions include dependency licenses in `dist/licenses/`.
+
+The Three.js integration test uses the real `WebXRManager` with the bundled bridge and mocked graphics calls. It verifies stereo cameras, full eye viewports, floor-relative height, quaternion propagation, and session cleanup; physical GPU rendering still requires a browser check.

@@ -3,3 +3,5 @@
 /extension/dist/
 *.log
 .DS_Store
+
+/web/dist/
