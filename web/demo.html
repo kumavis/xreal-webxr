@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+  <meta charset="utf-8" /><title>XREAL Stereo Test</title
+  ><style>
+    body {
+      background: #141c24;
+      color: white;
+      font: 18px system-ui;
+    }
+    button {
+      font: inherit;
+      padding: 15px;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+  <h1>Stereo + head tracking test</h1>
+  <p>
+    Connect in the toolbar first. The left eye is red; the right eye is blue.
+    The white world marker should move opposite your head turn.
+  </p>
+  <button id="enter">Enter VR</button>
+  <p id="result"></p>
+  <canvas id="c"></canvas>
+  <script>
+    const canvas = document.querySelector("#c");
+    const gl = canvas.getContext("webgl", { xrCompatible: true });
+    document.querySelector("#enter").onclick = async () => {
+      try {
+        await gl.makeXRCompatible();
+        const session = await navigator.xr.requestSession("immersive-vr", {
+          requiredFeatures: ["local"],
+        });
+        const layer = new XRWebGLLayer(session, gl);
+        session.updateRenderState({ baseLayer: layer });
+        const ref = await session.requestReferenceSpace("local");
+        document.querySelector("#result").textContent = "XR running";
+        window.xrTest = { frames: 0, views: 0, eyes: [], quaternion: null };
+        function frame(t, f) {
+          session.requestAnimationFrame(frame);
+          const pose = f.getViewerPose(ref);
+          if (!pose) return;
+          gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+          gl.enable(gl.SCISSOR_TEST);
+          window.xrTest.frames++;
+          window.xrTest.views = pose.views.length;
+          window.xrTest.eyes = pose.views.map((v) => v.eye);
+          window.xrTest.quaternion = [
+            pose.transform.orientation.x,
+            pose.transform.orientation.y,
+            pose.transform.orientation.z,
+            pose.transform.orientation.w,
+          ];
+          for (const view of pose.views) {
+            const v = layer.getViewport(view);
+            gl.viewport(v.x, v.y, v.width, v.height);
+            gl.scissor(v.x, v.y, v.width, v.height);
+            gl.clearColor(
+              view.eye === "left" ? 0.25 : 0.03,
+              0.04,
+              view.eye === "right" ? 0.25 : 0.03,
+              1,
+            );
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            const m = view.transform.inverse.matrix,
+              p = view.projectionMatrix;
+            const x = m[8] * -3 + m[12],
+              y = m[9] * -3 + m[13],
+              z = m[10] * -3 + m[14];
+            if (z < 0) {
+              const sx = v.x + v.width * (0.5 + (p[0] * x) / -z / 2),
+                sy = v.y + v.height * (0.5 + (p[5] * y) / -z / 2);
+              const size = Math.min(v.width, v.height) * 0.04;
+              gl.scissor(
+                Math.round(sx - size / 2),
+                Math.round(sy - size / 2),
+                Math.round(size),
+                Math.round(size),
+              );
+              gl.clearColor(1, 1, 1, 1);
+              gl.clear(gl.COLOR_BUFFER_BIT);
+            }
+          }
+          gl.disable(gl.SCISSOR_TEST);
+        }
+        session.requestAnimationFrame(frame);
+        session.addEventListener(
+          "end",
+          () => (document.querySelector("#result").textContent = "XR ended"),
+        );
+      } catch (e) {
+        document.querySelector("#result").textContent = e.toString();
+      }
+    };
+  </script>
+</html>

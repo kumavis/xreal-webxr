@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+  <meta charset="utf-8" /><title>XREAL WebXR Bridge</title
+  ><style>
+    body {
+      font: 17px system-ui;
+      max-width: 780px;
+      margin: 60px auto;
+      background: #12171e;
+      color: #e7eef7;
+      padding: 24px;
+    }
+    a {
+      color: #84c6ff;
+    }
+    button {
+      font: inherit;
+      padding: 8px;
+      margin: 5px;
+    }
+    pre {
+      white-space: pre-wrap;
+    }
+  </style>
+  <h1>XREAL WebXR Bridge</h1>
+  <p>
+    A local Rust helper and a browser extension. No account, cloud service, or
+    screen capture.
+  </p>
+  <pre id="status">Loading status…</pre>
+  <p><a href="/demo">Open stereo/head-tracking test</a></p>
+  <ol>
+    <li>
+      Load <code>extension/dist</code> as an unpacked extension in Chrome or
+      Brave.
+    </li>
+    <li>Reload this page. Click Connect in the XREAL toolbar.</li>
+    <li>Hold the glasses still for two seconds to calibrate.</li>
+    <li>Click Stereo mode; macOS should show the glasses as 3840 × 1080.</li>
+    <li>
+      Move the browser window onto the glasses display, go Fullscreen, and enter
+      VR.
+    </li>
+  </ol>
+  <p>
+    Exit XR, then Mirror mode returns the glasses to an ordinary monitor. Ctrl-C
+    in the helper also restores the initial mode.
+  </p>
+  <script>
+    setInterval(async () => {
+      try {
+        document.querySelector("#status").textContent = JSON.stringify(
+          await (await fetch("/status")).json(),
+          null,
+          2,
+        );
+      } catch {}
+    }, 500);
+  </script>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "xreal-webxr-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "iwer": "2.7.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "jsdom": "^26.1.0",
+    "prettier": "3.6.2"
+  }
+}

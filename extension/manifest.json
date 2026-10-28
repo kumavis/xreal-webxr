@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "XREAL WebXR Bridge",
+  "version": "0.1.0",
+  "description": "Local head tracking and stereo WebXR for XREAL glasses. MIT licensed; no accounts or telemetry.",
+  "background": { "service_worker": "background.js" },
+  "host_permissions": ["http://127.0.0.1:4242/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://goooooo.ooo/*", "http://127.0.0.1:4242/*"],
+      "js": ["runtime.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://goooooo.ooo/*", "http://127.0.0.1:4242/*"],
+      "js": ["relay.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    }
+  ]
+}
