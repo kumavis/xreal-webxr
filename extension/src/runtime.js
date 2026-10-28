@@ -27,7 +27,40 @@ let pose = null,
   lastUpdate = 0,
   session = null,
   statusText = "Start the Rust helper, then Connect";
-let status;
+let status, feedback, connectButton;
+let pendingAction = null,
+  actionTimer;
+const messages = {
+  connect: ["Connecting…", "Connected — head tracking is live"],
+  recenter: ["Recentering…", "Recentered ✓"],
+  calibrate: [
+    "Starting calibration…",
+    "Calibration started — hold still for two seconds",
+  ],
+  stereo: ["Switching to stereo…", "Stereo mode enabled ✓"],
+  mono: ["Switching to mirror…", "Mirror mode enabled ✓"],
+};
+function completeAction(ok, message) {
+  clearTimeout(actionTimer);
+  feedback.textContent = message;
+  feedback.dataset.state = ok ? "success" : "error";
+  pendingAction = null;
+}
+function beginAction(name) {
+  if (pendingAction) return;
+  pendingAction = name;
+  feedback.textContent = messages[name][0];
+  feedback.dataset.state = "pending";
+  actionTimer = setTimeout(
+    () =>
+      completeAction(
+        false,
+        "No confirmation received. Reload the extension and this page, then Connect again.",
+      ),
+    4500,
+  );
+  command(name);
+}
 const trackingReady = () =>
   pose?.connected &&
   pose.calibrated &&
@@ -44,9 +77,22 @@ window.addEventListener("message", (event) => {
     if (pose.connected && pose.calibrated && pose.age_ms < 200)
       device.quaternion.set(...pose.quaternion);
     statusText = pose.status;
+    if (pendingAction === "connect" && pose.connected)
+      completeAction(true, messages.connect[1]);
+  } else if (
+    event.data.type === "command_result" &&
+    event.data.command === pendingAction
+  ) {
+    completeAction(
+      event.data.ok === true,
+      event.data.ok === true
+        ? messages[pendingAction][1]
+        : String(event.data.message || "Command failed"),
+    );
   } else if (event.data.type === "status") {
     statusText = String(event.data.status);
     pose = null;
+    if (pendingAction) completeAction(false, statusText);
   }
 });
 const nativeRequest = navigator.xr.requestSession.bind(navigator.xr);
@@ -70,15 +116,17 @@ function ui() {
   host.id = "xreal-webxr-toolbar";
   host.style.cssText = "position:fixed;bottom:8px;left:8px;z-index:2147483647";
   const shadow = host.attachShadow({ mode: "open" });
-  shadow.innerHTML = `<style>:host{font:12px system-ui;color:#eee}section{background:#15191fee;border:1px solid #5d6977;border-radius:8px;padding:9px;max-width:650px}button,input{font:inherit;margin:3px;padding:5px;border:1px solid #667;border-radius:4px;background:#28303b;color:white}input{width:45px}small{display:block;color:#bac4d0}summary{cursor:pointer}#status{margin:4px 0}</style>
-    <section><details open><summary>XREAL WebXR · 3DoF + stereo</summary><div id="status"></div>
+  shadow.innerHTML = `<style>:host{font:12px system-ui;color:#eee}section{background:#15191fee;border:1px solid #5d6977;border-radius:8px;padding:9px;max-width:650px}button,input{font:inherit;margin:3px;padding:5px;border:1px solid #667;border-radius:4px;background:#28303b;color:white}input{width:45px}small{display:block;color:#bac4d0}summary{cursor:pointer}#status{margin:4px 0}button{cursor:pointer;box-shadow:0 2px 0 #080b10;transition:background .1s,transform .1s}button:hover{background:#3c4d62}button:active{transform:translateY(2px);box-shadow:inset 0 2px 3px #0008;background:#526c88}button:focus-visible{outline:2px solid #80c5ff;outline-offset:2px}#feedback{min-height:1.5em;margin:6px 3px;font-weight:600;color:#b8d8ff}#feedback[data-state=success]{color:#8ce6a5}#feedback[data-state=error]{color:#ffb6a9}</style>
+    <section><details open><summary>XREAL WebXR · 3DoF + stereo</summary><div id="status"></div><div id="feedback" role="status" aria-live="polite">Click Connect to start head tracking.</div>
     <button id="connect">Connect</button><button id="calibrate">Calibrate</button><button id="recenter">Recenter</button><button id="stereo">Stereo mode</button><button id="mono">Mirror mode</button><button id="fullscreen">Fullscreen</button><button id="exit">Exit XR</button>
     <label>IPD <input id="ipd" type="number" min="50" max="75" value="63">mm</label>
     <label>Diagonal FOV <input id="fov" type="number" min="35" max="65" value="52">°</label>
     <small>Move this browser window to the glasses, then Fullscreen and the site's Enter VR. Alt+R recenters. Escape exits fullscreen.</small></details></section>`;
   status = shadow.querySelector("#status");
+  feedback = shadow.querySelector("#feedback");
+  connectButton = shadow.querySelector("#connect");
   for (const name of ["connect", "calibrate", "recenter", "stereo", "mono"])
-    shadow.querySelector("#" + name).onclick = () => command(name);
+    shadow.querySelector("#" + name).onclick = () => beginAction(name);
   shadow.querySelector("#fullscreen").onclick = () =>
     document.documentElement
       .requestFullscreen()
@@ -97,6 +145,8 @@ function ui() {
     const stale = performance.now() - lastUpdate > 500;
     status.textContent =
       stale && pose ? "Tracking stale — check USB connection" : statusText;
+    connectButton.textContent =
+      pose?.connected && !stale ? "Connected ✓" : "Connect";
     host.dataset.connected = String(!!pose?.connected && !stale);
     host.dataset.calibrated = String(!!pose?.calibrated && !stale);
     host.dataset.session = String(!!session);
@@ -112,6 +162,6 @@ else ui();
 window.addEventListener("keydown", (event) => {
   if (event.altKey && event.code === "KeyR") {
     event.preventDefault();
-    command("recenter");
+    beginAction("recenter");
   }
 });

@@ -22,7 +22,12 @@ chrome.runtime.onConnect.addListener((port) => {
       socket = new WebSocket("ws://127.0.0.1:4242/ws");
       socket.onmessage = (e) => {
         try {
-          send({ type: "pose", pose: JSON.parse(e.data) });
+          const data = JSON.parse(e.data);
+          send(
+            data.type === "command_result"
+              ? data
+              : { type: "pose", pose: data },
+          );
         } catch {}
       };
       socket.onerror = () =>

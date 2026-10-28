@@ -63,6 +63,38 @@ test("bundled runtime replaces native XR, uses tracked stereo views, and ends on
         }),
       );
     feed();
+    const toolbar = w.document.querySelector("#xreal-webxr-toolbar").shadowRoot;
+    toolbar.querySelector("#recenter").click();
+    assert.equal(
+      toolbar.querySelector("#feedback").textContent,
+      "Recentering…",
+    );
+    // A pose is not an acknowledgement, even if orientation happens to be zero.
+    feed();
+    assert.equal(
+      toolbar.querySelector("#feedback").textContent,
+      "Recentering…",
+    );
+    w.dispatchEvent(
+      new w.MessageEvent("message", {
+        source: w,
+        data: {
+          source: "xreal-extension",
+          type: "command_result",
+          command: "recenter",
+          ok: true,
+        },
+      }),
+    );
+    assert.equal(
+      toolbar.querySelector("#feedback").textContent,
+      "Recentered ✓",
+    );
+    feed();
+    assert.equal(
+      toolbar.querySelector("#feedback").textContent,
+      "Recentered ✓",
+    );
     const session = await w.navigator.xr.requestSession("immersive-vr", {
       requiredFeatures: ["local"],
     });
@@ -147,6 +179,47 @@ test("bundled runtime replaces native XR, uses tracked stereo views, and ends on
     await assert.rejects(w.navigator.xr.requestSession("immersive-vr"), {
       name: "InvalidStateError",
     });
+    const demo = await readFile(
+      new URL("../../web/demo.html", import.meta.url),
+      "utf8",
+    );
+    const parsed = new JSDOM(demo);
+    const source = parsed.window.document.querySelector("script").textContent;
+    for (const id of ["enter", "result"])
+      w.document.body.append(parsed.window.document.querySelector("#" + id));
+    parsed.window.close();
+    canvas.id = "c";
+    Object.setPrototypeOf(gl, w.WebGLRenderingContext.prototype);
+    Object.assign(gl, {
+      bindFramebuffer() {},
+      enable() {},
+      disable() {},
+      viewport() {},
+      scissor() {},
+    });
+    canvas.getContext = () => gl;
+    w.eval(source);
+    w.document.querySelector("#enter").click();
+    assert.equal(
+      w.document.querySelector("#enter").textContent,
+      "Starting VR…",
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    assert.match(
+      w.document.querySelector("#result").textContent,
+      /Could not start VR: Connect glasses/,
+    );
+    feed();
+    w.document.querySelector("#enter").click();
+    const deadline = Date.now() + 2000;
+    while (!w.xrTest?.frames && Date.now() < deadline)
+      await new Promise((r) => setTimeout(r, 20));
+    assert.ok(
+      w.xrTest?.frames > 0,
+      w.document.querySelector("#result").textContent,
+    );
+    assert.equal(w.xrTest.views, 2);
+    assert.equal(w.document.querySelector("#enter").textContent, "VR running");
   } finally {
     w.close();
   }

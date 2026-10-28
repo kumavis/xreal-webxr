@@ -31,6 +31,18 @@ struct Pose {
     stereo: bool,
     status: String,
 }
+struct Command {
+    name: String,
+    reply: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
+}
+impl From<&str> for Command {
+    fn from(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            reply: None,
+        }
+    }
+}
 struct Shared {
     pose: Pose,
     updated: Instant,
@@ -38,7 +50,7 @@ struct Shared {
 #[derive(Clone)]
 struct App {
     shared: Arc<RwLock<Shared>>,
-    commands: mpsc::Sender<String>,
+    commands: mpsc::Sender<Command>,
     stopping: Arc<AtomicBool>,
 }
 impl App {
@@ -168,18 +180,41 @@ async fn client(mut socket: WebSocket, app: App) {
                 if socket.send(Message::Text(serde_json::to_string(&app.snapshot()).unwrap().into())).await.is_err(){break;}
             }
             msg=socket.recv()=> match msg {
-                Some(Ok(Message::Text(text))) if ["recenter","calibrate","stereo","mono"].contains(&text.as_str()) => { let _=app.commands.send(text.to_string()); }
+                Some(Ok(Message::Text(text))) if ["recenter","calibrate","stereo","mono"].contains(&text.as_str()) => {
+                    let name = text.to_string();
+                    let (reply, result) = tokio::sync::oneshot::channel();
+                    let outcome = if app.commands.send(Command { name: name.clone(), reply: Some(reply) }).is_err() {
+                        Err("Sensor worker is not running; restart the helper".to_string())
+                    } else {
+                        match tokio::time::timeout(Duration::from_secs(3), result).await {
+                            Ok(Ok(outcome)) => outcome,
+                            _ => Err("No confirmation from glasses; check USB connection".to_string()),
+                        }
+                    };
+                    let response = serde_json::json!({"type":"command_result", "command":name, "ok":outcome.is_ok(), "message":outcome.err()});
+                    if socket.send(Message::Text(response.to_string().into())).await.is_err() { break; }
+                }
                 Some(Ok(Message::Close(_)))|None|Some(Err(_))=>break,
                 _=>{}
             }
         }
     }
 }
-fn sensor_loop(app: App, rx: mpsc::Receiver<String>, simulate: bool, probe: bool) {
+fn sensor_loop(app: App, rx: mpsc::Receiver<Command>, simulate: bool, probe: bool) {
     if simulate {
         let start = Instant::now();
         loop {
-            if rx.try_iter().any(|c| c == "stop") {
+            let mut stop = false;
+            for cmd in rx.try_iter() {
+                if cmd.name == "stop" {
+                    stop = true;
+                }
+                if let Some(reply) = cmd.reply {
+                    let _ =
+                        reply.send(Err("Hardware controls are unavailable in simulation".into()));
+                }
+            }
+            if stop {
                 break;
             }
             let t = start.elapsed().as_secs_f32();
@@ -229,12 +264,22 @@ fn sensor_loop(app: App, rx: mpsc::Receiver<String>, simulate: bool, probe: bool
     }
     'read: loop {
         for cmd in rx.try_iter() {
-            match cmd.as_str() {
+            let result = match cmd.name.as_str() {
                 "stop" => break 'read,
-                "recenter" => f.recenter(),
-                "calibrate" => f.reset(),
+                "recenter" => {
+                    if f.ready {
+                        f.recenter();
+                        Ok(())
+                    } else {
+                        Err("Finish stationary calibration before recentering".into())
+                    }
+                }
+                "calibrate" => {
+                    f.reset();
+                    Ok(())
+                }
                 "stereo" | "mono" => {
-                    let stereo = cmd == "stereo";
+                    let stereo = cmd.name == "stereo";
                     match glasses.set_display_mode(if stereo {
                         DisplayMode::Stereo
                     } else {
@@ -243,11 +288,15 @@ fn sensor_loop(app: App, rx: mpsc::Receiver<String>, simulate: bool, probe: bool
                         Ok(()) => {
                             changed_mode = true;
                             app.shared.write().unwrap().pose.stereo = stereo;
+                            Ok(())
                         }
-                        Err(e) => eprintln!("Display mode change failed: {e:?}"),
+                        Err(e) => Err(format!("Display mode change failed: {e:?}")),
                     }
                 }
-                _ => {}
+                _ => Err("Unknown command".into()),
+            };
+            if let Some(reply) = cmd.reply {
+                let _ = reply.send(result);
             }
         }
         match glasses.read_event() {

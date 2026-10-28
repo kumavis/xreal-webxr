@@ -10,6 +10,31 @@
     button {
       font: inherit;
       padding: 15px;
+      cursor: pointer;
+      border: 2px solid #7699bd;
+      border-radius: 8px;
+      background: #304862;
+      color: white;
+      box-shadow: 0 3px 0 #080d13;
+    }
+    button:hover {
+      background: #476788;
+    }
+    button:active {
+      transform: translateY(3px);
+      box-shadow: inset 0 2px 4px #0008;
+    }
+    button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+    #result {
+      padding: 12px;
+      border-left: 4px solid #80c5ff;
+    }
+    #result[data-error="true"] {
+      border-color: #ff8d80;
+      color: #ffbdb5;
     }
     canvas {
       width: 100%;
@@ -23,21 +48,46 @@
     The white world marker should move opposite your head turn.
   </p>
   <button id="enter">Enter VR</button>
-  <p id="result"></p>
+  <p id="result" role="status" aria-live="polite">
+    Ready — Connect in the bottom toolbar, then press Enter VR.
+  </p>
   <canvas id="c"></canvas>
   <script>
     const canvas = document.querySelector("#c");
     const gl = canvas.getContext("webgl", { xrCompatible: true });
-    document.querySelector("#enter").onclick = async () => {
+    const enter = document.querySelector("#enter");
+    const result = document.querySelector("#result");
+    enter.onclick = async () => {
+      if (enter.disabled) return;
+      enter.disabled = true;
+      enter.textContent = "Starting VR…";
+      result.dataset.error = "false";
+      result.textContent = "Starting VR — checking WebGL…";
+      const waiting = setTimeout(() => {
+        result.textContent =
+          "Still waiting for VR startup. Reload the extension and page if this continues.";
+      }, 4000);
+      let session;
       try {
+        if (!gl)
+          throw new Error(
+            "WebGL is unavailable. Check Chrome graphics acceleration.",
+          );
+        if (!navigator.xr || !gl.makeXRCompatible)
+          throw new Error(
+            "WebXR bridge is unavailable. Reload the extension and this page.",
+          );
         await gl.makeXRCompatible();
-        const session = await navigator.xr.requestSession("immersive-vr", {
+        result.textContent = "Starting VR — requesting a tracked session…";
+        session = await navigator.xr.requestSession("immersive-vr", {
           requiredFeatures: ["local"],
         });
         const layer = new XRWebGLLayer(session, gl);
         session.updateRenderState({ baseLayer: layer });
         const ref = await session.requestReferenceSpace("local");
-        document.querySelector("#result").textContent = "XR running";
+        result.textContent =
+          "VR session started — waiting for the first frame…";
+        enter.textContent = "VR running";
         window.xrTest = { frames: 0, views: 0, eyes: [], quaternion: null };
         function frame(t, f) {
           session.requestAnimationFrame(frame);
@@ -46,6 +96,11 @@
           gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
           gl.enable(gl.SCISSOR_TEST);
           window.xrTest.frames++;
+          if (window.xrTest.frames === 1) {
+            clearTimeout(waiting);
+            result.textContent =
+              "VR running — turn your head to move the white marker.";
+          }
           window.xrTest.views = pose.views.length;
           window.xrTest.eyes = pose.views.map((v) => v.eye);
           window.xrTest.quaternion = [
@@ -87,12 +142,19 @@
           gl.disable(gl.SCISSOR_TEST);
         }
         session.requestAnimationFrame(frame);
-        session.addEventListener(
-          "end",
-          () => (document.querySelector("#result").textContent = "XR ended"),
-        );
+        session.addEventListener("end", () => {
+          clearTimeout(waiting);
+          result.textContent = "VR ended — you can enter again.";
+          enter.textContent = "Enter VR";
+          enter.disabled = false;
+        });
       } catch (e) {
-        document.querySelector("#result").textContent = e.toString();
+        clearTimeout(waiting);
+        if (session) await session.end().catch(() => {});
+        result.dataset.error = "true";
+        result.textContent = "Could not start VR: " + e.message;
+        enter.textContent = "Try Enter VR again";
+        enter.disabled = false;
       }
     };
   </script>

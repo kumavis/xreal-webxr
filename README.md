@@ -48,6 +48,8 @@ npm run build
 6. The left eye should have a red background and the right a blue background. The white world marker should move opposite your head turn and remain fixed in the virtual world. **Alt+R** recenters. Use **Escape** to leave fullscreen, then **Exit XR** to end the session.
 7. After the test works, open your `https://goooooo.ooo/` link, click **Connect** there, and use that site's **Enter VR** control. Private URL fragments remain in your browser; they are not part of this repository or sent to the helper.
 
+Button presses now show immediate feedback. **Recentered ✓** appears only after the sensor worker confirms the command; ordinary pose updates cannot confirm it. **Enter VR** shows startup progress and any failure beside the button.
+
 When rebuilding the extension, click **Reload** on its extension card and refresh the affected web pages. After changing the Rust helper or embedded test page, rebuild/restart the helper.
 
 The default optical values are 63 mm IPD and 52° diagonal FOV (Air 2 Ultra). Adjust the toolbar values to your glasses and fit. These are symmetric approximate optics, not factory lens calibration; IPD changes the rendered eye separation, not the physical optics.
