@@ -50,7 +50,7 @@ npm run build
 
 Button presses now show immediate feedback. **Recentered ✓** appears only after the sensor worker confirms the command; ordinary pose updates cannot confirm it. **Enter VR** shows startup progress and any failure beside the button.
 
-When rebuilding the extension, click **Reload** on its extension card and refresh the affected web pages. After changing the Rust helper or embedded test page, rebuild/restart the helper.
+After installing the auto-reload version for the first time, click **Reload** on the extension card and refresh your open test page once. Subsequent successful builds automatically reload the extension and refresh connected supported pages. A refreshed page remembers whether it was connected to the helper; VR itself must be entered again. Rust helper changes still require rebuilding/restarting the helper.
 
 The default optical values are 63 mm IPD and 52° diagonal FOV (Air 2 Ultra). Adjust the toolbar values to your glasses and fit. These are symmetric approximate optics, not factory lens calibration; IPD changes the rendered eye separation, not the physical optics.
 
@@ -60,7 +60,7 @@ Open <http://127.0.0.1:4242/scene> for a complete Three.js scene with a lit floo
 
 **Space** pauses/resumes the sculpture; **Escape** ends VR. Flat-screen preview supports dragging to orbit. In VR, the viewpoint is seated at 1.2 m with rotational tracking only. The scene hides its flat HTML controls during VR to avoid displaying them to just one eye.
 
-Three.js is pinned in the npm lockfile and bundled locally, with no CDN or external assets. `cd extension && npm ci && npm run build` generates `web/dist/scene.js` as well as the extension. The helper serves that bundle from the source checkout, so keep the checkout in place when running the binary. A missing bundle returns an actionable build message. Rebuilding scene JavaScript only requires refreshing the page; changing the embedded HTML requires rebuilding/restarting the helper.
+Three.js is pinned in the npm lockfile and bundled locally, with no CDN or external assets. `cd extension && npm ci && npm run build` generates `web/dist/scene.js` as well as the extension. The helper serves that bundle from the source checkout, so keep the checkout in place when running the binary. A missing bundle returns an actionable build message. Scene JavaScript and HTML edits are picked up by the development watcher. The helper reads HTML from the checkout, falling back to embedded HTML if those files are absent.
 
 ## Recovery and diagnostics
 
@@ -94,6 +94,21 @@ The helper receives only `recenter`, `calibrate`, `stereo`, and `mono` commands.
 To add another site, edit both content-script `matches` lists in `extension/manifest.json` and the origin allowlist in `extension/src/background.js`, then rebuild and reload. Cross-origin iframes are not injected by default. WebXR content inside an iframe may require additional explicit host matching and frame support. The extension overrides native WebXR only on its enabled pages; disable it when using another headset/runtime there.
 
 ## Development
+
+For automatic builds and browser reloads, keep the helper running and start:
+
+```sh
+cd extension
+npm run dev
+```
+
+The watcher rebuilds after edits to extension JavaScript, local scene HTML, the manifest, build script, or lockfile. A completed build publishes an atomic revision marker; connected supported pages check it about every two seconds. On a new revision, the extension tells those pages to refresh, calls Chrome's `runtime.reload()`, and the page then loads the new scripts. It ends any active XR session before refreshing. No new Chrome permissions are required.
+
+A supported page must be open for polling; background tabs can be throttled by Chrome. If no supported page is open, the next visit performs the check. Only pages attached to this extension are refreshed, including the enabled remote site. Failed builds and an unavailable helper do not trigger reloads. `npm run build` also publishes a revision, so the watcher is optional if you prefer explicit builds. Rebuilding unchanged inputs does not reload anything.
+
+The build endpoint receives only the installed build hash, never the current page URL or contents. The helper logs a new observed build hash, which can be used to verify that an automatic reload completed. The watcher stops with Ctrl-C.
+
+Run checks with:
 
 ```sh
 cargo test --workspace

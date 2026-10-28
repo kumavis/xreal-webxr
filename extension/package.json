@@ -6,7 +6,8 @@
   "license": "MIT",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "dev": "node watch.mjs"
   },
   "dependencies": {
     "iwer": "2.7.0",

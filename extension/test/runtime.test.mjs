@@ -236,6 +236,22 @@ test("bundled runtime replaces native XR, uses tracked stereo views, and ends on
     );
     assert.equal(w.xrTest.views, 2);
     assert.equal(w.document.querySelector("#enter").textContent, "VR running");
+    w.dispatchEvent(
+      new w.MessageEvent("message", {
+        source: w,
+        data: {
+          source: "xreal-extension",
+          type: "dev_reload",
+          build: "b".repeat(64),
+        },
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    assert.match(
+      toolbar.querySelector("#feedback").textContent,
+      /Extension rebuilt/,
+    );
+    assert.match(w.document.querySelector("#result").textContent, /VR ended/);
   } finally {
     w.close();
   }

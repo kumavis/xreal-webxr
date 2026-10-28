@@ -3,7 +3,7 @@ use ar_drivers::{nreal_air::NrealAir, ARGlasses, DisplayMode, GlassesEvent};
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        Query, State,
     },
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse},
@@ -11,7 +11,7 @@ use axum::{
     Json, Router,
 };
 use fusion::Fusion;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -51,6 +51,7 @@ struct DisplayRestore {
 struct Shared {
     pose: Pose,
     updated: Instant,
+    dev_build_seen: Option<String>,
 }
 #[derive(Clone)]
 struct App {
@@ -101,6 +102,7 @@ async fn main() {
         shared: Arc::new(RwLock::new(Shared {
             pose: initial(),
             updated: Instant::now(),
+            dev_build_seen: None,
         })),
         commands: tx,
         stopping: Arc::new(AtomicBool::new(false)),
@@ -131,17 +133,18 @@ async fn main() {
     let router = Router::new()
         .route(
             "/",
-            get(|| async { Html(include_str!("../../web/index.html")) }),
+            get(|| async { local_page("index.html", include_str!("../../web/index.html")).await }),
         )
         .route(
             "/demo",
-            get(|| async { Html(include_str!("../../web/demo.html")) }),
+            get(|| async { local_page("demo.html", include_str!("../../web/demo.html")).await }),
         )
         .route(
             "/scene",
-            get(|| async { Html(include_str!("../../web/scene.html")) }),
+            get(|| async { local_page("scene.html", include_str!("../../web/scene.html")).await }),
         )
         .route("/scene.js", get(scene_bundle))
+        .route("/dev/build", get(dev_build))
         .route(
             "/status",
             get(|State(app): State<App>| async move { Json(app.snapshot()) }),
@@ -160,6 +163,54 @@ async fn main() {
         .await
         .unwrap();
     worker.join().ok();
+}
+
+async fn local_page(name: &str, fallback: &str) -> Html<String> {
+    // Callers use fixed filenames; no user-controlled filesystem paths.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../web")
+        .join(name);
+    Html(
+        tokio::fs::read_to_string(path)
+            .await
+            .unwrap_or_else(|_| fallback.to_string()),
+    )
+}
+
+#[derive(Deserialize)]
+struct DevQuery {
+    loaded: Option<String>,
+}
+async fn dev_build(State(app): State<App>, Query(query): Query<DevQuery>) -> impl IntoResponse {
+    if let Some(loaded) = query
+        .loaded
+        .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        let mut state = app.shared.write().unwrap();
+        if state.dev_build_seen.as_ref() != Some(&loaded) {
+            println!("Extension auto-reload connected: build {}", &loaded[..12]);
+            state.dev_build_seen = Some(loaded);
+        }
+    }
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/dist/build.json");
+    match tokio::fs::read(path).await {
+        Ok(bytes) => (
+            StatusCode::OK,
+            [
+                ("content-type", "application/json"),
+                ("cache-control", "no-store"),
+            ],
+            bytes,
+        ),
+        Err(_) => (
+            StatusCode::NOT_FOUND,
+            [
+                ("content-type", "application/json"),
+                ("cache-control", "no-store"),
+            ],
+            b"{}".to_vec(),
+        ),
+    }
 }
 
 async fn scene_bundle() -> impl IntoResponse {
@@ -459,6 +510,7 @@ mod tests {
                 shared: Arc::new(RwLock::new(Shared {
                     pose: initial(),
                     updated: Instant::now(),
+                    dev_build_seen: None,
                 })),
                 commands,
                 stopping: Arc::new(AtomicBool::new(false)),
